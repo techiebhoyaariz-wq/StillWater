@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Little Formby WW — Water Quality Station</title>
+<meta name="application-name" content="ScadaView WQ_01">
+<style>
+  :root{
+    --bg:#2b2d30; --bg2:#242629; --panel:#303337; --panel2:#2a2c2f;
+    --card:#303337; --cardln:#45484d; --ink:#e7eaec; --mut:#9aa0a6; --dim:#6f757b;
+    --rail:#1d1f22; --grid:#3a3d41;
+    --ok:#39b54a; --okdim:#2b8a38; --warn:#f0a93b; --bad:#e3483f; --info:#4a9fd4;
+    --water:#2f7fb6; --waterTop:#49a6da; --vessel:#54585d; --vesselTop:#6a6f75;
+    --pipe:#5a5f65;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
+    color:var(--ink); font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px; -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column; min-height:100vh;
+  }
+  /* ---- top bar ---- */
+  .top{display:flex;align-items:center;gap:0;background:var(--rail);
+    border-bottom:1px solid #000;height:46px;flex:0 0 auto}
+  .brand{display:flex;align-items:center;gap:10px;padding:0 16px;height:100%}
+  .logo{width:26px;height:26px;flex:0 0 auto}
+  .brand b{font-size:15px;letter-spacing:.3px;font-weight:600}
+  .sep{width:1px;height:46px;background:#000;opacity:.6}
+  .top .title{padding:0 16px;color:var(--mut);font-size:14px}
+  .top .spacer{flex:1}
+  .top .meta{padding:0 16px;color:var(--mut);font-size:12.5px}
+  .top .meta b{color:var(--ink);font-weight:600}
+  .alarmcount{display:flex;align-items:center;gap:8px;padding:0 16px}
+  .alarmcount .pill{background:var(--bad);color:#fff;font-weight:700;border-radius:3px;
+    padding:3px 9px;font-size:13px;min-width:22px;text-align:center}
+  /* ---- status strip ---- */
+  .strip{display:flex;align-items:center;gap:22px;background:#202327;
+    border-bottom:1px solid #000;padding:5px 16px;font-size:12px;color:var(--mut);flex:0 0 auto}
+  .strip .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);
+    display:inline-block;margin-right:7px;box-shadow:0 0 5px var(--ok)}
+  .strip span{display:inline-flex;align-items:center}
+  /* ---- layout ---- */
+  .wrap{display:grid;grid-template-columns:1fr 272px;gap:0;flex:1 1 auto;min-height:0}
+  .main{padding:14px 16px 0;display:flex;flex-direction:column;min-width:0}
+  .side{background:var(--bg2);border-left:1px solid #000;padding:14px 14px 0;
+    display:flex;flex-direction:column;gap:14px}
+  /* ---- process mimic ---- */
+  .mimic{width:100%}
+  .mimic svg{width:100%;height:auto;display:block}
+  /* ---- faceplates ---- */
+  .faces{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px}
+  .fp{background:var(--card);border:1px solid var(--cardln);border-radius:3px;padding:9px 11px}
+  .fp .h{display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--cardln);padding-bottom:6px;margin-bottom:7px}
+  .fp .h b{font-size:12.5px;font-weight:600}
+  .fp .sym{width:18px;height:18px;opacity:.85}
+  .fp .r{display:flex;justify-content:space-between;line-height:1.75;font-size:11.5px}
+  .fp .r .k{color:var(--mut)}
+  .fp .r .v{font-weight:600;font-variant-numeric:tabular-nums}
+  .v.ok{color:var(--ok)} .v.bad{color:var(--bad)} .v.warn{color:var(--warn)} .v.info{color:var(--info)}
+  .tag{color:var(--dim);font-size:10.5px;font-family:Consolas,monospace;margin-top:3px}
+  .foot{font-size:11px;font-weight:600;margin-top:6px;text-align:center;
+    border-top:1px solid var(--cardln);padding-top:6px}
+  .foot.ok{color:var(--ok)} .foot.bad{color:var(--bad)}
+  /* ---- alarm list ---- */
+  .alarms{margin-top:14px;flex:1 1 auto;display:flex;flex-direction:column;min-height:120px}
+  .alarms .cap{color:var(--mut);font-size:12px;margin:0 0 6px;letter-spacing:.3px}
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  thead th{text-align:left;color:var(--mut);font-weight:600;border-bottom:1px solid var(--grid);
+    padding:5px 8px;background:#26292d;position:sticky;top:0}
+  tbody td{padding:5px 8px;border-bottom:1px solid #30343800;border-bottom:1px solid #2f3337;
+    font-variant-numeric:tabular-nums}
+  tbody tr:nth-child(even){background:#00000018}
+  .prio{font-weight:700;padding:1px 7px;border-radius:2px;font-size:10.5px;letter-spacing:.4px}
+  .prio.HIGH{background:var(--bad);color:#fff}
+  .prio.MEDIUM{background:var(--warn);color:#1b1b1b}
+  .prio.LOW{background:#4a5157;color:#dfe3e6}
+  td.msg{color:var(--ink)} td.tagc{color:var(--info);font-family:Consolas,monospace}
+  td.ts{color:var(--mut);font-family:Consolas,monospace}
+  /* ---- side panels ---- */
+  .sp{background:var(--panel);border:1px solid var(--cardln);border-radius:3px;padding:11px 12px}
+  .sp h3{margin:0 0 9px;font-size:12px;color:var(--ink);font-weight:600;letter-spacing:.3px}
+  .mrow{display:flex;align-items:center;justify-content:space-between;margin:7px 0;font-size:11.5px}
+  .mrow .k{color:var(--mut)}
+  .mrow .val{font-weight:600;font-variant-numeric:tabular-nums}
+  .bar{height:7px;width:96px;background:#1f2225;border-radius:4px;overflow:hidden;border:1px solid #16181b}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#3f7fae,#56a9db)}
+  .status-chip{padding:3px 0;border-radius:3px;text-align:center;font-weight:700;
+    font-size:11.5px;letter-spacing:.5px;margin-top:4px}
+  .status-chip.NORMAL{background:#20402a;color:var(--ok);border:1px solid #2f6b3d}
+  .status-chip.WARNING{background:#403518;color:var(--warn);border:1px solid #6b5327}
+  .status-chip.ALARM{background:#40211f;color:var(--bad);border:1px solid #6b302c}
+  .chartbox{background:var(--panel2);border:1px solid var(--cardln);border-radius:3px;
+    padding:8px 8px 4px;margin-top:2px}
+  .chartbox .lab{font-size:10.5px;color:var(--dim);font-family:Consolas,monospace;margin-bottom:3px}
+  .foot-rail{flex:0 0 auto;background:var(--rail);border-top:1px solid #000;
+    color:var(--dim);font-size:11px;padding:6px 16px;display:flex;justify-content:space-between}
+  text{font-family:"Segoe UI",Roboto,Arial,sans-serif}
+</style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 40 40" fill="none">
+        <rect x="1" y="1" width="38" height="38" rx="6" fill="#1a3c52" stroke="#2f6f97"/>
+        <path d="M20 8 C14 17 11 21 11 26 a9 9 0 0 0 18 0 C29 21 26 17 20 8 Z" fill="#49a6da"/>
+        <path d="M20 8 C14 17 11 21 11 26 a9 9 0 0 0 9 4.5 Z" fill="#2f7fb6"/>
+      </svg>
+      <b>LITTLE FORMBY&nbsp;WW</b>
+    </div>
+    <div class="sep"></div>
+    <div class="title">Water Quality Station&nbsp;&nbsp;·&nbsp;&nbsp;Edge Enabled</div>
+    <div class="spacer"></div>
+    <div class="meta">Screen&nbsp;ID:&nbsp;<b>WQ_01</b></div>
+    <div class="sep"></div>
+    <div class="meta">Logged-in&nbsp;User:&nbsp;<b>Operator</b></div>
+    <div class="sep"></div>
+    <div class="alarmcount"><span class="meta" style="padding:0">Active Alarms</span><span class="pill" id="alarmPill">0</span></div>
+  </div>
+
+  <div class="strip">
+    <span><i class="dot" id="plcDot"></i>PLC Online</span>
+    <span><i class="dot"></i>Edge Node Connected</span>
+    <span>PLC Cycle:&nbsp;<b style="color:var(--ink)" id="cycle">8 ms</b></span>
+    <span>Link:&nbsp;<b style="color:var(--ink)">Modbus/TCP&nbsp;:5020</b></span>
+  </div>
+
+  <div class="wrap">
+    <!-- ============ LEFT: PROCESS ============ -->
+    <div class="main">
+      <div class="mimic">
+        <svg viewBox="0 0 760 286" preserveAspectRatio="xMidYMin meet">
+          <!-- headers -->
+          <text x="120" y="20" fill="#cfd3d6" font-size="12.5" text-anchor="middle" font-weight="600">RAW WATER</text>
+          <text x="120" y="35" fill="#7f868c" font-size="10.5" text-anchor="middle" font-family="Consolas,monospace">PLC_1.Tank_Raw.Level</text>
+          <text x="380" y="20" fill="#cfd3d6" font-size="12.5" text-anchor="middle" font-weight="600">FILTRATION</text>
+          <text x="380" y="35" fill="#7f868c" font-size="10.5" text-anchor="middle" font-family="Consolas,monospace">PLC_1.Tank_Filter.Level</text>
+          <text x="640" y="20" fill="#cfd3d6" font-size="12.5" text-anchor="middle" font-weight="600">TREATED WATER</text>
+          <text x="640" y="35" fill="#7f868c" font-size="10.5" text-anchor="middle" font-family="Consolas,monospace">PLC_1.Tank_Treated.Level</text>
+
+          <!-- connecting pipes -->
+          <rect x="196" y="120" width="68" height="10" fill="#5a5f65"/>
+          <polygon points="264,114 280,125 264,136" fill="#7f868c"/>
+          <rect x="456" y="120" width="68" height="10" fill="#5a5f65"/>
+          <polygon points="524,114 540,125 524,136" fill="#7f868c"/>
+          <!-- outfall -->
+          <rect x="716" y="120" width="26" height="10" fill="#5a5f65"/>
+          <polygon points="742,114 758,125 742,136" fill="#7f868c"/>
+
+          <!-- ===== TANK: RAW ===== -->
+          <g>
+            <rect x="60" y="52" width="120" height="118" rx="3" fill="#3a3d41" stroke="#54585d" stroke-width="2"/>
+            <clipPath id="clipRaw"><rect x="62" y="54" width="116" height="114" rx="2"/></clipPath>
+            <g clip-path="url(#clipRaw)">
+              <rect x="62" y="54" width="116" height="114" fill="#4b4f54"/>
+              <rect id="fillRaw" x="62" y="104" width="116" height="64" fill="#2f7fb6"/>
+              <rect id="capRaw" x="62" y="104" width="116" height="4" fill="#49a6da"/>
+            </g>
+            <text id="txtRaw" x="120" y="118" fill="#eef1f3" font-size="13" text-anchor="middle" font-weight="600">75% / 3.2 m</text>
+          </g>
+          <!-- ===== TANK: FILTRATION ===== -->
+          <g>
+            <rect x="320" y="52" width="120" height="118" rx="3" fill="#3a3d41" stroke="#54585d" stroke-width="2"/>
+            <clipPath id="clipFil"><rect x="322" y="54" width="116" height="114" rx="2"/></clipPath>
+            <g clip-path="url(#clipFil)">
+              <rect x="322" y="54" width="116" height="114" fill="#4b4f54"/>
+              <rect id="fillFil" x="322" y="118" width="116" height="50" fill="#2f7fb6"/>
+              <rect id="capFil" x="322" y="118" width="116" height="4" fill="#49a6da"/>
+            </g>
+            <text id="txtFil" x="380" y="118" fill="#eef1f3" font-size="13" text-anchor="middle" font-weight="600">60% / 2.5 m</text>
+          </g>
+          <!-- ===== TANK: TREATED (LIVE) ===== -->
+          <g>
+            <rect x="580" y="52" width="120" height="118" rx="3" fill="#3a3d41" stroke="#54585d" stroke-width="2"/>
+            <clipPath id="clipTrt"><rect x="582" y="54" width="116" height="114" rx="2"/></clipPath>
+            <g clip-path="url(#clipTrt)">
+              <rect x="582" y="54" width="116" height="114" fill="#4b4f54"/>
+              <rect id="fillTrt" x="582" y="118" width="116" height="50" fill="#2f7fb6"/>
+              <rect id="capTrt" x="582" y="118" width="116" height="4" fill="#49a6da"/>
+            </g>
+            <line id="spLine" x1="582" y1="86" x2="698" y2="86" stroke="#f0a93b" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text x="704" y="89" fill="#f0a93b" font-size="10" >SP 3.0 m</text>
+            <text id="txtTrt" x="640" y="118" fill="#eef1f3" font-size="13" text-anchor="middle" font-weight="600">60% / 2.5 m</text>
+          </g>
+
+          <!-- ===== field symbols row (valves / pumps) ===== -->
+          <!-- Inlet valve -->
+          <g transform="translate(120,210)">
+            <polygon points="-15,-13 0,0 -15,13" fill="#45484d" stroke="#8a9096" stroke-width="1.5"/>
+            <polygon points="15,-13 0,0 15,13" fill="#45484d" stroke="#8a9096" stroke-width="1.5"/>
+            <rect x="-4" y="-26" width="8" height="12" fill="#8a9096"/>
+          </g>
+          <!-- Pump 1 -->
+          <g transform="translate(300,210)">
+            <circle id="p1circ" r="16" fill="#45484d" stroke="#39b54a" stroke-width="2"/>
+            <polygon points="-6,-8 10,0 -6,8" fill="#cfd3d6"/>
+          </g>
+          <!-- Pump 2 -->
+          <g transform="translate(470,210)">
+            <circle id="p2circ" r="16" fill="#45484d" stroke="#e3483f" stroke-width="2"/>
+            <polygon points="-6,-8 10,0 -6,8" fill="#cfd3d6"/>
+          </g>
+          <!-- Outlet valve -->
+          <g transform="translate(640,210)">
+            <polygon points="-15,-13 0,0 -15,13" fill="#45484d" stroke="#8a9096" stroke-width="1.5"/>
+            <polygon points="15,-13 0,0 15,13" fill="#45484d" stroke="#8a9096" stroke-width="1.5"/>
+            <rect x="-4" y="-26" width="8" height="12" fill="#8a9096"/>
+          </g>
+          <!-- PLC box -->
+          <rect x="350" y="250" width="110" height="28" rx="3" fill="#2a2c2f" stroke="#54585d"/>
+          <text x="405" y="268" fill="#9aa0a6" font-size="11" text-anchor="middle" font-family="Consolas,monospace">PLC-01 · :5020</text>
+        </svg>
+      </div>
+
+      <!-- faceplates -->
+      <div class="faces">
+        <div class="fp">
+          <div class="h"><b>Inlet Valve</b>
+            <svg class="sym" viewBox="-16 -16 32 32"><polygon points="-13,-11 0,0 -13,11" fill="none" stroke="#8a9096" stroke-width="1.5"/><polygon points="13,-11 0,0 13,11" fill="none" stroke="#8a9096" stroke-width="1.5"/></svg></div>
+          <div class="r"><span class="k">Mode</span><span class="v ok" id="ivMode">AUTO</span></div>
+          <div class="r"><span class="k">Status</span><span class="v" id="ivStat">100% OPEN</span></div>
+          <div class="tag">Tag: PLC_1.Valve_Inlet.Position</div>
+          <div class="foot ok" id="ivFoot">Permissive Active</div>
+        </div>
+        <div class="fp">
+          <div class="h"><b>Pump_1</b>
+            <svg class="sym" viewBox="-16 -16 32 32"><circle r="13" fill="none" stroke="#8a9096" stroke-width="1.5"/><polygon points="-5,-7 9,0 -5,7" fill="#8a9096"/></svg></div>
+          <div class="r"><span class="k">Mode</span><span class="v ok" id="p1Mode">AUTO</span></div>
+          <div class="r"><span class="k">Status</span><span class="v" id="p1Stat">Running</span></div>
+          <div class="r"><span class="k">&nbsp;</span><span class="v" id="p1Amp" style="color:var(--mut)">1450 RPM&nbsp;&nbsp;18.2 A</span></div>
+          <div class="tag">Tag: PLC_1.Pump_1.Status</div>
+          <div class="foot ok" id="p1Foot">Interlock Active</div>
+        </div>
+        <div class="fp">
+          <div class="h"><b>Pump_2</b>
+            <svg class="sym" viewBox="-16 -16 32 32"><circle r="13" fill="none" stroke="#8a9096" stroke-width="1.5"/><polygon points="-5,-7 9,0 -5,7" fill="#8a9096"/></svg></div>
+          <div class="r"><span class="k">Mode</span><span class="v bad" id="p2Mode">MANUAL</span></div>
+          <div class="r"><span class="k">Status</span><span class="v bad" id="p2Stat">FAULT</span></div>
+          <div class="r"><span class="k">Cause</span><span class="v bad" id="p2Cause">Overcurrent Trip</span></div>
+          <div class="tag">Tag: PLC_1.Pump_2.Status</div>
+          <div class="foot bad" id="p2Foot">Interlock Blocked</div>
+        </div>
+        <div class="fp">
+          <div class="h"><b>Outlet Valve</b>
+            <svg class="sym" viewBox="-16 -16 32 32"><polygon points="-13,-11 0,0 -13,11" fill="none" stroke="#8a9096" stroke-width="1.5"/><polygon points="13,-11 0,0 13,11" fill="none" stroke="#8a9096" stroke-width="1.5"/></svg></div>
+          <div class="r"><span class="k">Mode</span><span class="v ok" id="ovMode">AUTO</span></div>
+          <div class="r"><span class="k">Status</span><span class="v" id="ovStat">75% OPEN</span></div>
+          <div class="tag">Tag: PLC_1.Valve_Outlet.Position</div>
+          <div class="foot ok" id="ovFoot">Permissive Active</div>
+        </div>
+      </div>
+
+      <!-- alarm list -->
+      <div class="alarms">
+        <p class="cap">Alarm List</p>
+        <table>
+          <thead><tr><th style="width:74px">Priority</th><th style="width:88px">Timestamp</th><th style="width:170px">Tag Reference</th><th>Message</th></tr></thead>
+          <tbody id="alarmBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: ANALYTICS ============ -->
+    <div class="side">
+      <div class="sp">
+        <h3>Edge Analytics</h3>
+        <div style="color:var(--mut);font-size:11px;margin-bottom:4px">Edge Node Status:</div>
+        <div class="mrow"><span class="k">CPU Load</span><span class="val" id="cpu">45%</span></div>
+        <div class="mrow"><span class="k">Data Latency</span><span class="val" id="lat">15 ms</span></div>
+        <div class="mrow"><span class="k">Local Buffering</span><span class="val" id="buf">1.2 GB</span></div>
+        <div class="mrow"><span class="k">Last Sync</span><span class="val" id="sync">14:35:08</span></div>
+      </div>
+      <div class="sp">
+        <h3>Predictive Analytics</h3>
+        <div class="mrow"><span class="k">Anomaly Score</span><span class="val" id="anom">0.23</span></div>
+        <div class="mrow"><span class="k">Confidence</span><span class="val" id="conf">92%</span></div>
+        <div class="mrow"><span class="k">Status</span></div>
+        <div class="status-chip NORMAL" id="predChip">NORMAL</div>
+        <div class="chartbox">
+          <div class="lab">Edge_1.Model.Pump_Health_Index</div>
+          <svg viewBox="0 0 230 78" style="width:100%;height:auto">
+            <g stroke="#3a3d41" stroke-width="1">
+              <line x1="0" y1="19" x2="230" y2="19"/><line x1="0" y1="39" x2="230" y2="39"/><line x1="0" y1="59" x2="230" y2="59"/>
+            </g>
+            <path d="M4,70 C70,70 96,66 120,40 C150,10 176,8 226,8" fill="none" stroke="#e3483f" stroke-width="1.4" opacity="0.85"/>
+            <path id="healthCurve" d="M4,70 C70,70 96,66 120,40 C150,10 176,8 226,8" fill="none" stroke="#4a9fd4" stroke-width="2"/>
+            <circle id="healthDot" cx="226" cy="8" r="2.6" fill="#56a9db"/>
+          </svg>
+        </div>
+      </div>
+      <div class="sp" style="font-size:11px;color:var(--mut)">
+        <h3>Water Quality</h3>
+        <div class="mrow"><span class="k">Free Cl₂ (mg/L)</span><span class="val" id="cl2">0.68</span></div>
+        <div class="mrow"><span class="k">Turbidity (NTU)</span><span class="val" id="ntu">0.21</span></div>
+        <div class="mrow"><span class="k">pH</span><span class="val" id="ph">7.2</span></div>
+        <div class="mrow"><span class="k">Flow (m³/h)</span><span class="val" id="flow">12</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-rail">
+    <span>ScadaView&nbsp;4.2&nbsp;·&nbsp;read-only operator view&nbsp;·&nbsp;polling PLC-01 @ 127.0.0.1:5020</span>
+    <span id="clock">—</span>
+  </div>
+
+<script>
+(function(){
+  //@STATION_CFG
+  var $ = function(id){return document.getElementById(id);};
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  function pad(n){return (n<10?'0':'')+n;}
+  function now(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
+
+  // tank fill: y from 54 (top=100%) to 168 (bottom=0%), height 114
+  function setTank(fillId,capId,txtId,pct){
+    pct=clamp(pct,0,100);
+    var top=54, h=114, fh=h*pct/100, y=top+h-fh;
+    var f=$(fillId); f.setAttribute('y',y); f.setAttribute('height',fh);
+    $(capId).setAttribute('y',y);
+    var m=(pct/100*4.0).toFixed(1);
+    $(txtId).textContent=Math.round(pct)+'% / '+m+' m';
+    // colour: red near overflow
+    f.setAttribute('fill', pct>=90?'#b4553a':'#2f7fb6');
+    $(capId).setAttribute('fill', pct>=90?'#d98a63':'#49a6da');
+  }
+
+  function rows(list){
+    var b=$('alarmBody'); b.innerHTML='';
+    list.forEach(function(a){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td><span class="prio '+a.p+'">'+a.p+'</span></td>'+
+        '<td class="ts">'+a.t+'</td><td class="tagc">'+a.tag+'</td><td class="msg">'+a.m+'</td>';
+      b.appendChild(tr);
+    });
+  }
+
+  var jitterT=0;
+  function render(st){
+    var level=st.level||0, sp=st.setpoint||0, pump=!!st.pump, ovr=!!st.override, kp=!!st.keypad, flow=st.flow||0;
+    // three tanks: treated is live; raw/filter derived so the line moves together
+    setTank('fillTrt','capTrt','txtTrt',level);
+    setTank('fillRaw','capRaw','txtRaw',clamp(level+14,8,99));
+    setTank('fillFil','capFil','txtFil',clamp(level-7,5,97));
+
+    // setpoint marker on treated tank (safe band 40-60 -> ~ y)
+    var spPct=clamp(sp,0,100), spY=54+114-(114*spPct/100);
+    $('spLine').setAttribute('y1',spY); $('spLine').setAttribute('y2',spY);
+
+    // Pump_1 = real pump
+    var p1run=pump;
+    $('p1circ').setAttribute('stroke', p1run?'#39b54a':'#8a9096');
+    $('p1Mode').textContent='AUTO'; $('p1Mode').className='v ok';
+    $('p1Stat').textContent=p1run?'Running':'Stopped';
+    $('p1Stat').className='v '+(p1run?'ok':'');
+    $('p1Amp').textContent=p1run?'1450 RPM   18.2 A':'0 RPM   0.0 A';
+    $('p1Foot').textContent='Interlock Active'; $('p1Foot').className='foot ok';
+
+    // Pump_2 = interlock-bypass sabotage indicator
+    var setBad = ovr;  // overflow interlock bypassed
+    if(setBad){
+      $('p2circ').setAttribute('stroke','#e3483f');
+      $('p2Mode').textContent='MANUAL'; $('p2Mode').className='v bad';
+      $('p2Stat').textContent='FAULT'; $('p2Stat').className='v bad';
+      $('p2Cause').textContent='Overcurrent Trip'; $('p2Cause').className='v bad';
+      $('p2Foot').textContent='Interlock Blocked'; $('p2Foot').className='foot bad';
+    }else{
+      $('p2circ').setAttribute('stroke','#39b54a');
+      $('p2Mode').textContent='AUTO'; $('p2Mode').className='v ok';
+      $('p2Stat').textContent='Standby'; $('p2Stat').className='v ok';
+      $('p2Cause').textContent='None'; $('p2Cause').className='v ok';
+      $('p2Foot').textContent='Interlock Active'; $('p2Foot').className='foot ok';
+    }
+
+    // inlet valve reflects dosing setpoint sanity
+    var spSafe = sp>=40 && sp<=60;
+    $('ivStat').textContent = clamp(Math.round(sp),0,100)+'% OPEN';
+    $('ivStat').className = 'v '+(spSafe?'':'warn');
+    $('ivFoot').textContent = spSafe?'Permissive Active':'Setpoint Out Of Range';
+    $('ivFoot').className = 'foot '+(spSafe?'ok':'bad');
+
+    $('flow').textContent=flow;
+
+    // --- predictive / anomaly tied to how sabotaged we are ---
+    var hazard=(ovr?0.55:0)+(spSafe?0:0.28)+(level>=90?0.18:0);
+    var anom=clamp(0.04+hazard,0,0.97);
+    $('anom').textContent=anom.toFixed(2);
+    var state = anom<0.3?'NORMAL':(anom<0.6?'WARNING':'ALARM');
+    var chip=$('predChip'); chip.textContent=state; chip.className='status-chip '+state;
+    $('conf').textContent=(90+Math.round(Math.sin(jitterT/3)*3+4))+'%';
+    $('healthCurve').setAttribute('stroke', anom<0.3?'#4a9fd4':(anom<0.6?'#f0a93b':'#e3483f'));
+    $('healthDot').setAttribute('fill', anom<0.3?'#56a9db':(anom<0.6?'#f0a93b':'#e3483f'));
+
+    // water quality ambient (pH drifts under sabotage)
+    $('cl2').textContent=(spSafe?0.68:0.41+ (jitterT%3)*0.01).toFixed(2);
+    $('ntu').textContent=(level>=90?0.44:0.21).toFixed(2);
+    $('ph').textContent=(spSafe?7.2:6.2).toFixed(1);
+
+    // edge analytics light jitter
+    jitterT++;
+    $('cpu').textContent=(44+Math.round(Math.abs(Math.sin(jitterT/4))*8))+'%';
+    $('lat').textContent=(13+Math.round(Math.abs(Math.cos(jitterT/5))*6))+' ms';
+    $('buf').textContent=(1.1+Math.abs(Math.sin(jitterT/7))*0.6).toFixed(1)+' GB';
+    $('sync').textContent=now();
+    $('cycle').textContent=(7+(jitterT%3))+' ms';
+
+    // --- alarm list built from live state ---
+    var t=now(), A=[];
+    if(ovr) A.push({p:'HIGH',t:t,tag:'PLC_1.ISH_301.Bypass',m:'Overflow interlock bypassed'});
+    if(level>=90) A.push({p:'HIGH',t:t,tag:'PLC_1.LT_301.Level',m:'Contact tank high level ('+Math.round(level)+'%)'});
+    if(!spSafe) A.push({p:'MEDIUM',t:t,tag:'PLC_1.FIC_102.SP',m:'Dosing setpoint out of range ('+Math.round(sp)+')'});
+    if(setBad) A.push({p:'HIGH',t:t,tag:'PLC_1.Pump_2.Fault',m:'Pump 2 overcurrent trip'});
+    if(kp) A.push({p:'LOW',t:t,tag:'PLC_1.Keypad.Access',m:'Engineer keypad entry in progress'});
+    A.push({p:'LOW',t:t,tag:'Edge_1.AnomalyScore',m:'Predictive warning threshold ('+anom.toFixed(2)+')'});
+    if(A.length===1 && !ovr && spSafe && level<90){
+      A.unshift({p:'LOW',t:t,tag:'PLC_1.System',m:'Process within normal limits'});
+    }
+    rows(A);
+    var crit=A.filter(function(x){return x.p!=='LOW';}).length;
+    $('alarmPill').textContent=crit;
+    $('alarmPill').style.background = crit? '#e3483f':'#4a5157';
+    $('clock').textContent=t;
+  }
+
+  function poll(){
+    fetch('/api/state',{cache:'no-store'}).then(function(r){return r.json();})
+      .then(render).catch(function(){ $('plcDot').style.background='#e3483f'; });
+  }
+  poll(); setInterval(poll,600);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Operation Stillwater
+# The plant (waterworks_plc.py) and the console (stillwater.py) use the Python
+# standard library only — nothing to install to play the CTF.
+pygame==2.6.1        # only for the animated World View (worldview.py)
+# pymodbus==3.6.9    # optional — only if you want to script your own attacks
