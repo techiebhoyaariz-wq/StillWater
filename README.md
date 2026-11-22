@@ -1,95 +1,101 @@
-# Operation Stillwater — Hacking the Physical World
+# Operation Stillwater
 
-An OT / ICS security capture-the-flag for LUHack. You attack a simulated
-water-treatment plant over **Modbus/TCP** — a real industrial protocol with no
-authentication. Clone it, run one command, and the plant **boots up in alarm and
-hands you the controls**, like a live system under attack.
+An OT/ICS security capture the flag, built for LUHack (Lancaster University's ethical
+hacking society).
 
-- **12 flags**, each a real OT attack technique (mapped to MITRE ATT&CK for ICS):
-  unauthenticated recon, setpoint/interlock manipulation, a **replay attack** (T0831),
-  **default credentials** (T0812) on an engineering console, known-plaintext crypto,
-  **spoofing the operator's HMI** (T0856), stream-reassembly forensics, a synthesis
-  capstone, hardcoded secrets in HMI source, **broken access control** on `/maint`,
-  and a **change-operating-mode** write-protect bypass (T0858).
-- **Randomised per launch** — flags, cipher key, the replayable command and PIN differ
-  every run, so copying is pointless and there's nothing to look up. Set
-  `STILLWATER_SEED` to reproduce an instance for marking.
-- **No coding.** Players use a console, a browser, Wireshark, and CyberChef.
-- **One instance per player**, localhost only. Nothing shared, nothing exposed.
-- A live **operator HMI** in the browser (`http://127.0.0.1:8800`) and an animated
-  plant view, so you watch the tank flood on the real operator's screen — and calm
-  it as you win.
+It runs a fake but believable water treatment plant that speaks **Modbus/TCP**, the
+industrial protocol from 1979 that ships with no authentication. An attacker has
+sabotaged the plant: the chlorine dosing setpoint is forced out of range and the
+overflow interlock is switched off, so the contact tank is heading for an overflow.
+You play the responder. You get onto the controller, take back control, and piece
+together what the attacker did. Everything you recover is a flag in the form
+`luhack{...}`.
 
-Animated plant view inspired by [VirtuaPlant](https://github.com/jseidl/virtuaplant)
-(GPLv2), rewritten for Python 3 with pygame.
+Twelve flags. Every one is a real OT attack technique, and most map to a MITRE ATT&CK
+for ICS ID. There is no scripting. You work with a console, a web browser, Wireshark
+and CyberChef.
 
----
+## Why it is built the way it is
 
-## Quickstart
+It runs entirely on your own machine on nothing but the Python standard library. No
+Docker, no admin rights, no internet. That was a hard constraint. Our lab machines
+are locked down, and a shared server that falls over halfway through a session ruins
+it for the whole room. So every player gets a private, isolated copy on localhost and
+nobody can break anyone else's.
 
-```bash
-git clone <your-repo-url> operation-stillwater
-cd operation-stillwater
-pip install pygame
-python3 lab.py
+Every launch is randomised from a seed. Your flags, the cipher key, the attacker's
+replayable command, the engineer PIN and the firmware build are all different from the
+next person's, so copying someone else's answer gets you nothing. If you want two
+people on the same instance, or you want to reproduce one for marking, set
+`STILLWATER_SEED` to any value before you start.
+
+## Running it
+
+```
+python3 start.py
 ```
 
-`lab.py` opens the **Lab Manager** — a TUI like the lab VM manager. Select
-**Launch Operation Stillwater**, accept the warning, and the gateway boots, the
-operator display opens, and you drop into the console. Type `help`; `quit` shuts
-it all down. (Prefer no menu? `python3 start.py` launches straight away.)
+That boots the plant, opens the operator screen in your browser at
+`http://127.0.0.1:8800`, and drops you into the attack console. Type `help` for the
+command list. Type `quit` to stop.
 
-> **Lab only.** Binds to `127.0.0.1`. These techniques are illegal against real
-> systems (Computer Misuse Act 1990). Attack the simulator, nothing else.
+To prove every flag is reachable, run the blind solver in a second terminal:
 
----
-
-## The challenges
-
-| # | Challenge | What it tests |
-| --- | --- | --- |
-| 1 | Recon — read the unauthenticated controller, decode the access token | encoding recognition |
-| 2 | The rigged dose — fix the sabotaged setpoint | control manipulation |
-| 3 | The bypass — restore the overflow interlock | control manipulation |
-| 4 | Replay a captured privileged command (T0831) | capture analysis / replay |
-| 5 | Default credentials on the `/diag` console (T0812) | credential attack |
-| 6 | The cipher — known-plaintext XOR | cryptanalysis |
-| 7 | Spoof the operator's HMI readout (T0856) | reporting-message spoof |
-| 8 | The culprit — reassemble the split capture | forensics |
-| 9 | Master override — restore everything | synthesis / chaining |
-| 10 | The operator's screen — hardcoded token in the HMI source | source review / surface pivot |
-| 11 | Maintenance console — bypass `/maint` access control, chain the PIN | web exploitation / chaining |
-| 12 | Write-protected — bypass the RUN-mode write-lock (T0858) | protocol / operating-mode |
-
-Players get `handout.md`. Organisers get `organiser_answers.md` and `RUNBOOK.md`.
-
----
-
-## What's in here
-
-| File | Role |
-| --- | --- |
-| `lab.py` | Lab Manager TUI — pick the challenge, launch it. |
-| `start.py` | Direct launcher — boot, display, console (no menu). |
-| `waterworks_plc.py` | The simulated PLC (standard library only). |
-| `stillwater.py` | The field console players attack with. |
-| `monitor.py` | Live operations monitor — a SCADA screen that reacts to your attacks (opens in its own window). |
-| `hmi.html` | The operator HMI — an SVG P&ID served by the plant at `:8800`, polling live state (Challenge 10 lives in its source). |
-| `worldview.py` | Optional animated plant display (needs pygame). |
-| `incident.pcap` | The Wireshark challenge (regenerated per session by the plant). |
-| `handout.md` | Give to participants. |
-| `RUNBOOK.md` | Run-the-session guide for organisers. |
-| `organiser_answers.md` | Flags, memory map, cognitive design, AI-resistance. |
-| `solve_test.py` | Pre-session self-check — blind-solves a random instance. |
-| `requirements.txt` | pygame pin (the plant and console need nothing). |
-
-## Verify it works
-
-```bash
+```
 python3 waterworks_plc.py &
-python3 solve_test.py        # expect: ALL 12 SOLVE OK
+python3 solve_test.py
 ```
 
-## Requirements
+It finishes with `ALL 12 SOLVE OK`. The solver has no knowledge of the seed; it cracks
+a fresh random instance the way a reasoning player would.
 
-Python 3.8+ and `pygame` (for the display only — the CTF runs without it).
+If `pip` is blocked on your machine, ignore the error. The game needs nothing outside
+the standard library. The animated pygame view is the only optional extra.
+
+## The twelve challenges
+
+Scaffolded on purpose. The first three are quick confidence wins. Four through eight
+are the core. Nine ties everything together. Ten through twelve pivot onto the web/HMI
+surface and chain into each other.
+
+| # | Challenge | Technique |
+|---|-----------|-----------|
+| 1 | Recon: read the unauthenticated controller and decode a token | unauthenticated read |
+| 2 | Rigged dose: write the sabotaged setpoint back to safe | T0836 Modify Parameter |
+| 3 | Interlock bypass: clear the forced override coil | T0855 Unauthorized Command |
+| 4 | Replay attack: resend a captured privileged command | T0831 Manipulation of Control |
+| 5 | Default credentials: log in to the `/diag` console on factory defaults | T0812 Default Credentials |
+| 6 | The cipher: break a weak XOR with known plaintext | cryptanalysis |
+| 7 | Spoof the operator: forge the HMI readout | T0856 Spoof Reporting Message |
+| 8 | The culprit: reassemble the attacker's split capture | traffic forensics |
+| 9 | Master override: fully restore the plant, then reuse the cipher key | synthesis |
+| 10 | HMI source: find the hardcoded token in the page source | CWE-798 |
+| 11 | Maintenance console: bypass the `/maint` access control | broken access control |
+| 12 | Write protected: change the operating mode to defeat a write lock | T0858 Change Operating Mode |
+
+## Documentation
+
+- `handout.md` is what players get: the brief, the flags, and staged hints.
+- `DESIGN.md` is the design brief: scenario, architecture and the reasoning behind each flag.
+- `WALKTHROUGH.md` documents where every flag hides and how it is found (full spoilers).
+- `organiser_answers.md` is the complete answer key with the MITRE mapping and the trap list.
+- `RUNBOOK.md` is how a committee member runs a live session.
+
+## Layout
+
+```
+waterworks_plc.py   the vulnerable Modbus PLC (all twelve flags live here)
+stillwater.py       the player's attack console
+hmi.html            the operator HMI web screen
+monitor.py          the live security event monitor
+start.py            one command launcher
+lab.py              menu style launcher
+worldview.py        optional animated plant view
+solve_test.py       the blind solver (proof of solvability)
+deck/               the workshop slides
+```
+
+## Safety
+
+This is a deliberately insecure target. Run it on localhost only. Never expose the
+Modbus port or the HMI to a real network.
