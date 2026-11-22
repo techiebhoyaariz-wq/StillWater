@@ -1,7 +1,6 @@
 # Operation Stillwater
 
-An OT/ICS security capture the flag, built for LUHack (Lancaster University's ethical
-hacking society).
+An OT/ICS security capture the flag,
 
 It runs a fake but believable water treatment plant that speaks **Modbus/TCP**, the
 industrial protocol from 1979 that ships with no authentication. An attacker has
